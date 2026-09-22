@@ -1,0 +1,5 @@
+# That is the whole dependency list. There is no deep learning framework
+# here -- the models, the autograd-free backward passes, the optimizer and
+# the renderer are all written against numpy directly.
+numpy>=2.0
+pillow>=10.0      # only for PNG/JPEG encoding: the web UI and the augmenter

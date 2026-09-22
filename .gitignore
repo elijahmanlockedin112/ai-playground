@@ -1,0 +1,14 @@
+# Trained weights: regenerate with train.py / train_cnn.py.
+# The 3x3 classifier is ~25 min of CPU, the language models 10-50 min each.
+checkpoints/
+
+# Generated corpora: reproducible exactly from corpus/make_corpus.py,
+# which is seeded. See the README for the three commands.
+corpus/*.txt
+
+logs/
+*.log
+__pycache__/
+*.pyc
+.venv/
+docs/where-we-left-off.md

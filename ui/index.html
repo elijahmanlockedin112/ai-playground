@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Playground</title>
+<style>
+  :root {
+    --bg: #0b0d10;
+    --panel: #13161b;
+    --panel-2: #181c22;
+    --line: #262c35;
+    --ink: #e8e5de;
+    --dim: #868c96;
+    --accent: #f0a868;
+    --accent-soft: rgba(240, 168, 104, 0.14);
+    --good: #6fc3a0;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f6f4ef; --panel: #fffdf9; --panel-2: #f1ede5;
+      --line: #ded8cc; --ink: #24201a; --dim: #6c6559;
+      --accent: #b2662a; --accent-soft: rgba(178, 102, 42, 0.10);
+      --good: #2f7f5f;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; flex-direction: column;
+  }
+  code, .mono, textarea, #out {
+    font-family: "Cascadia Code", "JetBrains Mono", ui-monospace,
+                 Consolas, "Courier New", monospace;
+  }
+
+  /* ---------- header ---------- */
+  header {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 12px 20px; border-bottom: 1px solid var(--line);
+    background: var(--panel);
+  }
+  .brand { font-weight: 650; letter-spacing: .14em; font-size: 12px;
+           text-transform: uppercase; color: var(--accent); }
+  .brand span { color: var(--dim); margin-left: 8px; letter-spacing: .04em;
+                text-transform: none; font-weight: 400; }
+  header .spacer { flex: 1; }
+  select, input[type=number], textarea, button {
+    font: inherit; color: var(--ink); background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px;
+  }
+  select { min-width: 260px; }
+  .badge {
+    font-size: 12px; color: var(--dim); white-space: nowrap;
+  }
+  .badge b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- layout ---------- */
+  main {
+    flex: 1; display: grid; grid-template-columns: 1fr 340px;
+    gap: 0; min-height: 0;
+  }
+  main[hidden] { display: none; }   /* beats display:grid, which [hidden] does not */
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; }
+    aside { border-left: none !important; border-top: 1px solid var(--line); }
+  }
+
+  /* ---------- output ---------- */
+  .stage { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  #out {
+    flex: 1; overflow-y: auto; padding: 22px 26px; margin: 0;
+    white-space: pre-wrap; word-break: break-word;
+    font-size: 14.5px; line-height: 1.62;
+  }
+  #out .prompt { color: var(--dim); }
+  #out .gen { color: var(--ink); }
+  #out .empty { color: var(--dim); font-style: italic; }
+  .cursor {
+    display: none; width: 8px; height: 1.05em; vertical-align: text-bottom;
+    background: var(--accent); animation: blink 1s steps(2) infinite;
+  }
+  .streaming .cursor { display: inline-block; }
+  @keyframes blink { 0%, 50% { opacity: 1 } 50.01%, 100% { opacity: 0 } }
+
+  .statusbar {
+    display: flex; gap: 20px; align-items: center; flex-wrap: wrap;
+    padding: 9px 26px; border-top: 1px solid var(--line);
+    background: var(--panel); font-size: 12px; color: var(--dim);
+  }
+  .statusbar b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .meter {
+    flex: 1; min-width: 120px; height: 4px; border-radius: 3px;
+    background: var(--line); overflow: hidden; max-width: 260px;
+  }
+  .meter i { display: block; height: 100%; width: 0;
+             background: var(--accent); transition: width .12s linear; }
+
+  /* ---------- controls ---------- */
+  aside {
+    border-left: 1px solid var(--line); background: var(--panel);
+    padding: 18px; overflow-y: auto; display: flex; flex-direction: column;
+    gap: 16px;
+  }
+  label { display: block; font-size: 12px; color: var(--dim);
+          margin-bottom: 6px; letter-spacing: .02em; }
+  label .v { float: right; color: var(--ink); font-variant-numeric: tabular-nums; }
+  textarea {
+    width: 100%; min-height: 96px; resize: vertical; line-height: 1.5;
+    font-size: 13px;
+  }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .row { display: flex; gap: 10px; }
+  .row > * { flex: 1; }
+  button {
+    cursor: pointer; font-weight: 600; padding: 10px 14px;
+    transition: background .12s, border-color .12s;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent);
+                   color: #14100b; }
+  button.primary:hover { filter: brightness(1.08); }
+  button:disabled { opacity: .45; cursor: default; filter: none; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    font-size: 11.5px; padding: 5px 9px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--line); background: transparent; color: var(--dim);
+    font-family: inherit; font-weight: 500;
+  }
+  .chip:hover { color: var(--accent); border-color: var(--accent);
+                background: var(--accent-soft); }
+  .note { font-size: 11.5px; color: var(--dim); line-height: 1.5; }
+  hr { border: none; border-top: 1px solid var(--line); margin: 2px 0; }
+
+  /* ---------- tabs ---------- */
+  .tabs { display: flex; gap: 4px; }
+  .tab {
+    padding: 6px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+    background: transparent; border: 1px solid var(--line); color: var(--dim);
+  }
+  .tab.on { color: var(--accent); border-color: var(--accent);
+            background: var(--accent-soft); }
+
+  /* ---------- vision ---------- */
+  #vision-mode { grid-template-columns: 1fr 300px; }
+  .gallery {
+    flex: 1; overflow-y: auto; padding: 20px;
+    display: grid; gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    align-content: start;
+  }
+  .card {
+    border: 1px solid var(--line); border-radius: var(--radius);
+    overflow: hidden; background: var(--panel-2);
+  }
+  .card img { width: 100%; display: block; image-rendering: pixelated; }
+  .card .verdict {
+    padding: 7px 9px; font-size: 11.5px; line-height: 1.35;
+    border-top: 1px solid var(--line);
+  }
+  .card .verdict b { font-size: 12.5px; }
+  .card.cube .verdict b { color: var(--accent); }
+  .card.wrong { border-color: #c0504d; }
+  .card.wrong .verdict::after {
+    content: " — wrong"; color: #c0504d; font-weight: 600;
+  }
+  .card .truth { color: var(--dim); }
+  .conf { height: 3px; background: var(--line); margin-top: 5px; }
+  .conf i { display: block; height: 100%; background: var(--accent); }
+  .empty-state {
+    grid-column: 1 / -1; color: var(--dim); font-style: italic;
+    padding: 30px 4px;
+  }
+  .drop {
+    border: 1px dashed var(--line); border-radius: var(--radius);
+    padding: 14px; text-align: center; cursor: pointer;
+    transition: border-color .12s, background .12s;
+  }
+  .drop b { font-size: 12.5px; }
+  .drop:hover, .drop.over { border-color: var(--accent);
+                            background: var(--accent-soft); }
+  .drop.over b { color: var(--accent); }
+  .card.mine { border-color: var(--accent); }
+  .card.mine .verdict::after { content: none; }
+  .card .fname {
+    color: var(--dim); overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">AI Playground<span>every weight trained here, nothing imported</span></div>
+  <div class="tabs">
+    <button class="tab on" data-mode="text">Text</button>
+    <button class="tab" data-mode="vision">Vision</button>
+  </div>
+  <div class="spacer"></div>
+  <select id="model" title="checkpoints/*.npz, rescanned automatically"></select>
+  <div class="badge" id="modelinfo">&nbsp;</div>
+</header>
+
+<main id="text-mode">
+  <div class="stage">
+    <div id="out"><span class="empty">Nothing yet. Write a prompt and press Generate.</span></div>
+    <div class="statusbar">
+      <span><b id="s-chars">0</b> chars</span>
+      <span><b id="s-rate">—</b> tok/s</span>
+      <span><b id="s-time">—</b></span>
+      <span title="how full the model's context window is">
+        context <b id="s-ctx">0</b>
+      </span>
+      <span class="meter"><i id="s-meter"></i></span>
+    </div>
+  </div>
+
+  <aside>
+    <div>
+      <label for="prompt">Prompt <span class="v">Ctrl+Enter</span></label>
+      <textarea id="prompt" spellcheck="false">RECIPE: </textarea>
+    </div>
+
+    <div class="chips" id="chips"></div>
+
+    <div class="row">
+      <button class="primary" id="go">Generate</button>
+      <button id="stop" disabled>Stop</button>
+    </div>
+
+    <hr>
+
+    <div>
+      <label for="temp">Temperature <span class="v" id="temp-v">0.80</span></label>
+      <input type="range" id="temp" min="0" max="1.5" step="0.05" value="0.8">
+      <div class="note">0 is greedy and repetitive. Above 1.1 it starts
+        inventing words.</div>
+    </div>
+
+    <div>
+      <label for="topk">Top-k <span class="v" id="topk-v">20</span></label>
+      <input type="range" id="topk" min="0" max="68" step="1" value="20">
+      <div class="note">Keep only the k likeliest characters. 0 disables it.</div>
+    </div>
+
+    <div>
+      <label for="len">Length <span class="v" id="len-v">500</span></label>
+      <input type="range" id="len" min="50" max="2000" step="50" value="500">
+    </div>
+
+    <div>
+      <label for="seed">Seed <span class="v">blank = random</span></label>
+      <input type="number" id="seed" placeholder="e.g. 7" style="width:100%">
+    </div>
+
+    <hr>
+    <div class="note" id="arch">&nbsp;</div>
+  </aside>
+</main>
+
+<main id="vision-mode" hidden>
+  <div class="stage">
+    <div class="gallery" id="gallery">
+      <div class="empty-state">Press Render &amp; classify. Every image is
+        drawn fresh — the model has never seen any of them.</div>
+    </div>
+    <div class="statusbar">
+      <span>accuracy on this batch <b id="v-acc">—</b></span>
+      <span><b id="v-n">0</b> images</span>
+      <span><b id="v-ms">—</b></span>
+      <span class="note" style="flex:1">green title = it says cube ·
+        red border = it got it wrong</span>
+    </div>
+  </div>
+
+  <aside>
+    <div>
+      <label for="vmodel">Convnet</label>
+      <select id="vmodel" style="width:100%"></select>
+    </div>
+
+    <div class="row">
+      <button class="primary" id="vgo">Render &amp; classify</button>
+    </div>
+
+    <div id="drop" class="drop">
+      <b>Your own images</b>
+      <div class="note">Drop them here, click to browse, or paste with
+        Ctrl+V. Anything works — cubes, not-cubes, photos off your phone.</div>
+      <input type="file" id="vfile" accept="image/*" multiple hidden>
+    </div>
+
+    <div>
+      <label for="vn">Images <span class="v" id="vn-v">12</span></label>
+      <input type="range" id="vn" min="4" max="48" step="4" value="12">
+    </div>
+
+    <div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="vhard" checked
+               style="width:auto;accent-color:var(--accent)">
+        Realistic mess
+      </label>
+      <div class="note">On: textured backgrounds, clutter, occlusion, blur,
+        colour casts, JPEG artefacts. Off: clean renders, which are far
+        easier and are not what it was trained on.</div>
+    </div>
+
+    <hr>
+    <div class="note">
+      Seven puzzles: 2&times;2, 3&times;3, 4&times;4 and 5&times;5 cubes, a
+      Pyraminx, a Skewb and a Megaminx — against plain boxes, checkerboard
+      boxes, spheres, cylinders and flat 3&times;3 colour grids. The plain
+      box has the right shape and no stickers; the flat grid has the right
+      stickers and no box; the Skewb is the same solid as a Rubik's cube cut
+      a different way. Telling 4&times;4 from 5&times;5 means counting.
+    </div>
+    <hr>
+    <div class="note" id="varch">&nbsp;</div>
+  </aside>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const out = $('out');
+let controller = null;
+
+// Each document type in the corpus has its own header, so typing one
+// steers the model into that register. This is the fun part.
+const PRESETS = [
+  'RECIPE: ', 'Q: ', 'HOW TO ', 'DAY 42 -- ', 'INVENTORY: ',
+  'LETTER, from ', 'NOTICE: ', 'GLOSSARY', 'WEATHER LOG -- ',
+  'MEETING NOTES -- ', '"Who left'
+];
+
+// ---------------------------------------------------------------- models
+let models = [];
+
+async function refreshModels() {
+  try {
+    const r = await fetch('/api/models');
+    const data = await r.json();
+    const prev = $('model').value;
+    models = data.models;
+    $('model').innerHTML = models.map(m => {
+      const bits = m.bits_per_char ? m.bits_per_char.toFixed(2) + ' bits/char'
+                                   : 'untrained';
+      return `<option value="${m.name}">${m.name} — ${fmt(m.params)} params · ${bits}</option>`;
+    }).join('');
+    if (prev && models.some(m => m.name === prev)) $('model').value = prev;
+    showInfo();
+  } catch (e) { /* server restarting; try again next tick */ }
+}
+
+function current() { return models.find(m => m.name === $('model').value); }
+function fmt(n) { return n >= 1e6 ? (n/1e6).toFixed(1)+'M' : Math.round(n/1000)+'K'; }
+
+function showInfo() {
+  const m = current();
+  if (!m) { $('modelinfo').textContent = 'no checkpoints yet'; return; }
+  $('modelinfo').innerHTML =
+    `context <b>${m.block}</b> · <b>${m.step.toLocaleString()}</b> steps`;
+  $('arch').innerHTML =
+    `<b>${m.name}</b><br>${m.layers} layers · ${m.heads} heads · width ${m.embd}
+     · ${m.vocab} symbols<br>context window ${m.block} characters` +
+    (m.data ? `<br>trained on ${m.data}` : '');
+  $('s-meter').style.width = '0%';
+}
+
+// ------------------------------------------------------------- generate
+async function generate() {
+  const m = current();
+  if (!m) return;
+  if (controller) controller.abort();
+  controller = new AbortController();
+
+  const prompt = $('prompt').value;
+  const body = {
+    model: m.name, prompt,
+    tokens: +$('len').value,
+    temperature: +$('temp').value,
+    top_k: +$('topk').value,
+    seed: $('seed').value === '' ? null : +$('seed').value
+  };
+
+  out.classList.add('streaming');
+  out.innerHTML = '';
+  const pre = document.createElement('span');
+  pre.className = 'prompt'; pre.textContent = prompt;
+  const gen = document.createElement('span'); gen.className = 'gen';
+  const cur = document.createElement('span'); cur.className = 'cursor';
+  out.append(pre, gen, cur);
+
+  $('go').disabled = true; $('stop').disabled = false;
+  const t0 = performance.now();
+  let n = 0, ctx = prompt.length;
+
+  try {
+    const res = await fetch('/api/generate', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body), signal: controller.signal
+    });
+    if (!res.ok) throw new Error('server said ' + res.status);
+
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, {stream: true});
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 1);
+        if (!line.trim()) continue;
+        const msg = JSON.parse(line);
+        if (msg.type === 'token') {
+          gen.textContent += msg.text;
+          n++; ctx++;
+          const secs = (performance.now() - t0) / 1000;
+          $('s-chars').textContent = n;
+          $('s-rate').textContent = (n / secs).toFixed(0);
+          $('s-time').textContent = secs.toFixed(1) + 's';
+          const used = Math.min(ctx, m.block);
+          $('s-ctx').textContent = used + '/' + m.block;
+          $('s-meter').style.width = (100 * used / m.block) + '%';
+          out.scrollTop = out.scrollHeight;
+        } else if (msg.type === 'done') {
+          $('s-rate').textContent = msg.tokens_per_sec.toFixed(0);
+          $('s-time').textContent = msg.seconds.toFixed(1) + 's';
+        } else if (msg.type === 'error') {
+          gen.textContent += '\n\n[' + msg.message + ']';
+        }
+      }
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') gen.textContent += '\n\n[' + e.message + ']';
+  } finally {
+    out.classList.remove('streaming');
+    $('go').disabled = false; $('stop').disabled = true;
+    controller = null;
+  }
+}
+
+// ------------------------------------------------------------------ wire
+$('go').onclick = generate;
+$('stop').onclick = () => controller && controller.abort();
+$('model').onchange = showInfo;
+$('temp').oninput = e => $('temp-v').textContent = (+e.target.value).toFixed(2);
+$('topk').oninput = e => $('topk-v').textContent =
+  +e.target.value === 0 ? 'off' : e.target.value;
+$('len').oninput  = e => $('len-v').textContent = e.target.value;
+$('prompt').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); generate(); }
+});
+$('chips').innerHTML = PRESETS.map(p =>
+  `<button class="chip">${p.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;')}</button>`
+).join('');
+$('chips').onclick = e => {
+  if (!e.target.classList.contains('chip')) return;
+  $('prompt').value = PRESETS[[...$('chips').children].indexOf(e.target)];
+  $('prompt').focus();
+};
+
+// ---------------------------------------------------------------- vision
+let vmodels = [];
+
+async function refreshVision() {
+  try {
+    const r = await fetch('/api/vision/models');
+    vmodels = (await r.json()).models;
+    const prev = $('vmodel').value;
+    $('vmodel').innerHTML = vmodels.map(m => {
+      const acc = m.val_acc ? ` · ${(m.val_acc * 100).toFixed(1)}%` : '';
+      return `<option value="${m.name}">${m.name} — ${fmt(m.params)} params${acc}</option>`;
+    }).join('') || '<option value="">no convnet trained yet</option>';
+    if (prev && vmodels.some(m => m.name === prev)) $('vmodel').value = prev;
+    vShowInfo();
+  } catch (e) {}
+}
+
+function vShowInfo() {
+  const m = vmodels.find(x => x.name === $('vmodel').value);
+  $('varch').innerHTML = m
+    ? `<b>${m.name}</b><br>${m.size}&times;${m.size} RGB in ·
+       conv ${m.channels.join(' → ')}<br>${m.step.toLocaleString()} steps of training`
+    : 'train one with <code>python train_cnn.py</code>';
+}
+
+async function classify() {
+  const m = vmodels.find(x => x.name === $('vmodel').value);
+  if (!m) return;
+  $('vgo').disabled = true;
+  $('gallery').innerHTML = '<div class="empty-state">rendering…</div>';
+  try {
+    const r = await fetch('/api/vision/sample', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({model: m.name, n: +$('vn').value,
+                            hard: $('vhard').checked})
+    });
+    if (!r.ok) throw new Error('server said ' + r.status);
+    const d = await r.json();
+    $('gallery').innerHTML = d.items.map(it => `
+      <div class="card ${it.is_cube ? 'cube' : ''} ${it.correct ? '' : 'wrong'}">
+        <img src="${it.png}" alt="">
+        <div class="verdict">
+          <b>${it.pred}</b>
+          <div class="truth">${(it.confidence * 100).toFixed(0)}% sure ·
+            really ${it.truth}</div>
+          <div class="conf"><i style="width:${it.confidence * 100}%"></i></div>
+        </div>
+      </div>`).join('');
+    $('v-acc').textContent = (d.accuracy * 100).toFixed(0) + '%';
+    $('v-n').textContent = d.items.length;
+    $('v-ms').textContent = (d.seconds * 1000).toFixed(0) + ' ms';
+  } catch (e) {
+    $('gallery').innerHTML = `<div class="empty-state">${e.message}</div>`;
+  } finally {
+    $('vgo').disabled = false;
+  }
+}
+
+// ------------------------------------------------- your own images
+// Shrink in the browser before uploading: a phone photo is several
+// megabytes and the model only ever sees 64x64 of it.
+function shrink(file, max = 320) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onerror = () => reject(new Error('could not read ' + file.name));
+    fr.onload = () => {
+      const im = new Image();
+      im.onerror = () => reject(new Error('not an image: ' + file.name));
+      im.onload = () => {
+        const s = Math.min(1, max / Math.max(im.width, im.height));
+        const cv = document.createElement('canvas');
+        cv.width = Math.round(im.width * s);
+        cv.height = Math.round(im.height * s);
+        cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
+        resolve({name: file.name || 'pasted image',
+                 data: cv.toDataURL('image/jpeg', 0.92)});
+      };
+      im.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+
+async function classifyMine(files) {
+  const m = vmodels.find(x => x.name === $('vmodel').value);
+  if (!m || !files.length) return;
+  $('gallery').innerHTML = '<div class="empty-state">reading your images…</div>';
+  try {
+    const images = await Promise.all([...files].slice(0, 24).map(f => shrink(f)));
+    const r = await fetch('/api/vision/classify', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({model: m.name, images})
+    });
+    if (!r.ok) throw new Error('server said ' + r.status);
+    const d = await r.json();
+    $('gallery').innerHTML = d.items.map(it => it.error
+      ? `<div class="card"><div class="verdict"><b>${it.name}</b>
+           <div class="truth">${it.error}</div></div></div>`
+      : `<div class="card mine ${it.is_cube ? 'cube' : ''}">
+           <img src="${it.png}" alt="">
+           <div class="verdict">
+             <b>${it.pred}</b>
+             <div class="fname" title="${it.name}">${it.name}</div>
+             <div class="truth">${(it.confidence * 100).toFixed(0)}% sure${
+               it.runner_up ? ', else ' + it.runner_up : ''} ·
+               this is what it saw</div>
+             <div class="conf"><i style="width:${it.confidence * 100}%"></i></div>
+           </div>
+         </div>`).join('');
+    $('v-acc').textContent = '—';
+    $('v-n').textContent = d.items.length;
+    $('v-ms').textContent = 'your images';
+  } catch (e) {
+    $('gallery').innerHTML = `<div class="empty-state">${e.message}</div>`;
+  }
+}
+
+$('drop').onclick = () => $('vfile').click();
+$('vfile').onchange = e => classifyMine(e.target.files);
+['dragenter', 'dragover'].forEach(ev =>
+  $('drop').addEventListener(ev, e => {
+    e.preventDefault(); $('drop').classList.add('over');
+  }));
+['dragleave', 'drop'].forEach(ev =>
+  $('drop').addEventListener(ev, e => {
+    e.preventDefault(); $('drop').classList.remove('over');
+  }));
+$('drop').addEventListener('drop', e => {
+  if (e.dataTransfer.files.length) classifyMine(e.dataTransfer.files);
+});
+window.addEventListener('paste', e => {
+  if ($('vision-mode').hidden) return;
+  const files = [...(e.clipboardData?.items || [])]
+    .filter(i => i.type.startsWith('image/')).map(i => i.getAsFile());
+  if (files.length) classifyMine(files);
+});
+
+$('vgo').onclick = classify;
+$('vmodel').onchange = vShowInfo;
+$('vn').oninput = e => $('vn-v').textContent = e.target.value;
+
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach(o => o.classList.toggle('on', o === t));
+  const vision = t.dataset.mode === 'vision';
+  $('text-mode').hidden = vision;
+  $('vision-mode').hidden = !vision;
+  if (vision) refreshVision();
+});
+
+refreshModels();
+refreshVision();
+setInterval(() => { refreshModels(); refreshVision(); }, 15000);
+</script>
+</body>
+</html>
